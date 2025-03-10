@@ -1,21 +1,55 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import type { Session, User } from "@supabase/supabase-js";
+import type {
+	Session,
+	User,
+	AuthError,
+	AuthResponse,
+} from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { createClientComponentClient } from "@/lib/supabase";
 import { toast } from "sonner";
+import type { Database } from "@/types/database.types";
 
+// Typowanie dla danych zwracanych przez funkcje auth
+type AuthData = {
+	user: User | null;
+	session: Session | null;
+};
+
+// Typowanie dla metadanych użytkownika
+type UserMetadata = {
+	username?: string;
+	name?: string;
+	surname?: string;
+	role?: "user" | "admin" | "school_admin" | "student";
+	school_id?: string;
+	admin_of_school_id?: string;
+	[key: string]:
+		| string
+		| undefined
+		| "user"
+		| "admin"
+		| "school_admin"
+		| "student";
+};
+
+// Typy dla kontekstu
 type SupabaseContextType = {
 	user: User | null;
 	session: Session | null;
 	isLoading: boolean;
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	signUp: (email: string, password: string, metadata?: any) => Promise<any>;
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	signIn: (email: string, password: string) => Promise<any>;
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	signOut: () => Promise<any>;
+	signUp: (
+		email: string,
+		password: string,
+		metadata?: UserMetadata,
+	) => Promise<{ data: AuthData | null; error: AuthError | null }>;
+	signIn: (
+		email: string,
+		password: string,
+	) => Promise<{ data: AuthData | null; error: AuthError | null }>;
+	signOut: () => Promise<{ error: AuthError | null }>;
 	refreshSession: () => Promise<void>;
 };
 
@@ -23,9 +57,9 @@ const SupabaseContext = createContext<SupabaseContextType>({
 	user: null,
 	session: null,
 	isLoading: true,
-	signUp: async () => ({}),
-	signIn: async () => ({}),
-	signOut: async () => ({}),
+	signUp: async () => ({ data: null, error: null }),
+	signIn: async () => ({ data: null, error: null }),
+	signOut: async () => ({ error: null }),
 	refreshSession: async () => {},
 });
 
@@ -39,6 +73,8 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
 	const supabase = createClientComponentClient();
 
 	useEffect(() => {
+		let isMounted = true;
+
 		// Get initial session
 		const initializeAuth = async () => {
 			try {
@@ -51,36 +87,50 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
 					return;
 				}
 
-				setSession(session);
-				setUser(session?.user ?? null);
+				if (isMounted) {
+					setSession(session);
+					setUser(session?.user ?? null);
+				}
 			} catch (error) {
 				console.error("Auth initialization error:", error);
 			} finally {
-				setIsLoading(false);
+				if (isMounted) {
+					setIsLoading(false);
+				}
 			}
 		};
 
 		// Subscribe to auth changes
 		const {
 			data: { subscription },
-		} = supabase.auth.onAuthStateChange((_event, session) => {
-			setSession(session);
-			setUser(session?.user ?? null);
-			router.refresh();
+		} = supabase.auth.onAuthStateChange((event, session) => {
+			if (isMounted) {
+				setSession(session);
+				setUser(session?.user ?? null);
+
+				// Tylko przy logowaniu/wylogowaniu, nie przy każdej zmianie sesji
+				if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+					router.refresh();
+				}
+			}
 		});
 
 		initializeAuth();
 
 		return () => {
+			isMounted = false;
 			subscription.unsubscribe();
 		};
 	}, [supabase, router]);
 
-	// Improved error handling in auth methods
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	const signUp = async (email: string, password: string, metadata?: any) => {
+	// Funkcje autoryzacyjne z poprawnym typowaniem
+	const signUp = async (
+		email: string,
+		password: string,
+		metadata?: UserMetadata,
+	): Promise<{ data: AuthData | null; error: AuthError | null }> => {
 		try {
-			const { data, error } = await supabase.auth.signUp({
+			const response: AuthResponse = await supabase.auth.signUp({
 				email,
 				password,
 				options: {
@@ -88,44 +138,71 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
 				},
 			});
 
-			if (error) {
-				toast.error(error.message);
-				return { data: null, error };
+			if (response.error) {
+				toast.error(response.error.message);
+				return { data: null, error: response.error };
 			}
 
 			toast.success("Konto zostało utworzone");
 
-			return { data, error: null };
-			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		} catch (error: any) {
-			toast.error(error.message);
-			return { data: null, error };
+			return {
+				data: {
+					user: response.data.user,
+					session: response.data.session,
+				},
+				error: null,
+			};
+		} catch (err) {
+			const error = err as Error;
+			toast.error(error.message || "Wystąpił błąd podczas rejestracji");
+			return {
+				data: null,
+				error: {
+					name: "UnknownError",
+					message: error.message || "Wystąpił błąd podczas rejestracji",
+				} as AuthError,
+			};
 		}
 	};
 
-	const signIn = async (email: string, password: string) => {
+	const signIn = async (
+		email: string,
+		password: string,
+	): Promise<{ data: AuthData | null; error: AuthError | null }> => {
 		try {
-			const { data, error } = await supabase.auth.signInWithPassword({
+			const response: AuthResponse = await supabase.auth.signInWithPassword({
 				email,
 				password,
 			});
 
-			if (error) {
-				toast.error(error.message);
-				return { data: null, error };
+			if (response.error) {
+				toast.error(response.error.message);
+				return { data: null, error: response.error };
 			}
 
 			toast.success("Zalogowano pomyślnie");
 
-			return { data, error: null };
-			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		} catch (error: any) {
-			toast.error(error.message);
-			return { data: null, error };
+			return {
+				data: {
+					user: response.data.user,
+					session: response.data.session,
+				},
+				error: null,
+			};
+		} catch (err) {
+			const error = err as Error;
+			toast.error(error.message || "Wystąpił błąd podczas logowania");
+			return {
+				data: null,
+				error: {
+					name: "UnknownError",
+					message: error.message || "Wystąpił błąd podczas logowania",
+				} as AuthError,
+			};
 		}
 	};
 
-	const signOut = async () => {
+	const signOut = async (): Promise<{ error: AuthError | null }> => {
 		try {
 			const { error } = await supabase.auth.signOut();
 			if (error) {
@@ -134,17 +211,21 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
 			}
 
 			toast.success("Wylogowano pomyślnie");
-
 			router.push("/signin");
 			return { error: null };
-			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		} catch (error: any) {
-			toast.error(error.message);
-			return { error };
+		} catch (err) {
+			const error = err as Error;
+			toast.error(error.message || "Wystąpił błąd podczas wylogowywania");
+			return {
+				error: {
+					name: "UnknownError",
+					message: error.message || "Wystąpił błąd podczas wylogowywania",
+				} as AuthError,
+			};
 		}
 	};
 
-	const refreshSession = async () => {
+	const refreshSession = async (): Promise<void> => {
 		try {
 			const {
 				data: { session },

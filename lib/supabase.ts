@@ -2,8 +2,15 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database.types";
 
+// Singleton instance dla client-side
+let clientInstance: ReturnType<typeof createClient<Database>> | null = null;
+
 // Client for client-side code
 export const createClientComponentClient = () => {
+	if (clientInstance) {
+		return clientInstance;
+	}
+
 	const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 	const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -13,19 +20,22 @@ export const createClientComponentClient = () => {
 		);
 	}
 
-	return createClient<Database>(supabaseUrl, supabaseAnonKey, {
+	clientInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 		auth: {
 			persistSession: true,
 			autoRefreshToken: true,
 		},
-		// Add global error handler for better debugging
 		global: {
 			fetch: (...args) => {
 				return fetch(...args);
 			},
 		},
 	});
+
+	return clientInstance;
 };
+
+// Reszta kodu pozostaje bez zmian...
 
 // Client for server-side code (API routes, Server Components)
 export const createServerComponentClient = async () => {
