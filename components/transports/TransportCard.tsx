@@ -3,15 +3,14 @@
 import React from "react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { Transport } from "@/types/transport";
-import { Calendar, Clock, MapPin, Truck, User } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import type { Transport } from "@/types/transport.types";
 
 interface TransportCardProps {
 	transport: Transport;
 }
+import { Calendar, Clock, MapPin, Truck, User } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export default function TransportCard({ transport }: TransportCardProps) {
 	// Format dates for display
@@ -32,15 +31,18 @@ export default function TransportCard({ transport }: TransportCardProps) {
 
 	// Get creator display name (either student name or username)
 	const getCreatorName = () => {
-		if (transport.creator.student?.name && transport.creator.student?.surname) {
+		if (
+			transport.creator?.student?.name &&
+			transport.creator.student?.surname
+		) {
 			return `${transport.creator.student.name} ${transport.creator.student.surname}`;
 		}
 
-		if (transport.creator.name && transport.creator.surname) {
+		if (transport.creator?.name && transport.creator?.surname) {
 			return `${transport.creator.name} ${transport.creator.surname}`;
 		}
 
-		return transport.creator.username;
+		return transport.creator?.username || "Nieznany";
 	};
 
 	// Check if transport has expired or is not available
@@ -76,9 +78,11 @@ export default function TransportCard({ transport }: TransportCardProps) {
 					<Badge variant={isUnavailable ? "destructive" : "default"}>
 						{isUnavailable ? "Niedostępne" : daysUntilExpiry()}
 					</Badge>
-					<Badge variant="outline" className="bg-white">
-						{transport.category.name}
-					</Badge>
+					{transport.category && (
+						<Badge variant="outline" className="bg-white">
+							{transport.category.name}
+						</Badge>
+					)}
 				</div>
 			</div>
 
@@ -89,10 +93,12 @@ export default function TransportCard({ transport }: TransportCardProps) {
 							<User size={16} className="text-amber-500" />
 							<span className="text-sm font-medium">{getCreatorName()}</span>
 						</div>
-						<div className="flex items-center gap-2">
-							<Truck size={16} className="text-amber-500" />
-							<span className="text-sm">{transport.vehicle.name}</span>
-						</div>
+						{transport.vehicle && (
+							<div className="flex items-center gap-2">
+								<Truck size={16} className="text-amber-500" />
+								<span className="text-sm">{transport.vehicle.name}</span>
+							</div>
+						)}
 					</div>
 
 					<div className="space-y-2">

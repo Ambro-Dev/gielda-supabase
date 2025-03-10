@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/DatePicker";
 import { FilterX, Search, SlidersHorizontal } from "lucide-react";
 import { useFiltersStore } from "@/stores/filters-store";
-import type { Tag } from "@/types/transport";
+import { useCategories, useVehicles } from "@/hooks/use-categories-vehicles"; // Używamy istniejących hooków!
 import {
 	Sheet,
 	SheetContent,
@@ -26,18 +26,30 @@ import {
 import TransportsList from "./TransportsList";
 import { Separator } from "@/components/ui/separator";
 import { useIsMobile } from "@/hooks/use-mobile";
+import type { Tag, Transport } from "@/types/transport.types";
 
 interface TransportsFilterProps {
-	categories: Tag[];
-	vehicles: Tag[];
+	categories?: Tag[];
+	vehicles?: Tag[];
+	initialTransports?: Transport[];
 }
 
 export default function TransportsFilter({
-	categories,
-	vehicles,
+	categories: initialCategories,
+	vehicles: initialVehicles,
+	initialTransports,
 }: TransportsFilterProps) {
 	const isMobile = useIsMobile();
 	const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+
+	// Pobierz kategorie i pojazdy z hooków jeśli nie przekazano jako props
+	const { data: categoriesData, isLoading: categoriesLoading } =
+		useCategories();
+	const { data: vehiclesData, isLoading: vehiclesLoading } = useVehicles();
+
+	// Użyj danych przekazanych jako props (SSR) lub pobranych z hooków (CSR)
+	const categories = initialCategories || (categoriesData as Tag[]) || [];
+	const vehicles = initialVehicles || (vehiclesData as Tag[]) || [];
 
 	// Get filters and actions from store
 	const {
@@ -118,14 +130,16 @@ export default function TransportsFilter({
 				<div className="space-y-2">
 					<Label htmlFor="category">Kategoria</Label>
 					<Select
-						value={categoryId || ""}
-						onValueChange={(value) => setCategory(value || null)}
+						value={categoryId || "all"}
+						onValueChange={(value) =>
+							setCategory(value === "all" ? null : value)
+						}
 					>
 						<SelectTrigger id="category">
 							<SelectValue placeholder="Wybierz kategorię" />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="">Wszystkie kategorie</SelectItem>
+							<SelectItem value="all">Wszystkie kategorie</SelectItem>
 							{categories.map((category) => (
 								<SelectItem key={category.id} value={category.id}>
 									{category.name} ({category._count?.transports || 0})
@@ -138,14 +152,16 @@ export default function TransportsFilter({
 				<div className="space-y-2">
 					<Label htmlFor="vehicle">Pojazd</Label>
 					<Select
-						value={vehicleId || ""}
-						onValueChange={(value) => setVehicle(value || null)}
+						value={vehicleId || "all"}
+						onValueChange={(value) =>
+							setVehicle(value === "all" ? null : value)
+						}
 					>
 						<SelectTrigger id="vehicle">
 							<SelectValue placeholder="Wybierz pojazd" />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="">Wszystkie pojazdy</SelectItem>
+							<SelectItem value="all">Wszystkie pojazdy</SelectItem>
 							{vehicles.map((vehicle) => (
 								<SelectItem key={vehicle.id} value={vehicle.id}>
 									{vehicle.name} ({vehicle._count?.transports || 0})
@@ -229,12 +245,11 @@ export default function TransportsFilter({
 						<SelectContent>
 							<SelectItem value="date-desc">Najnowsze</SelectItem>
 							<SelectItem value="date-asc">Najstarsze</SelectItem>
-							{/* Other sorting options could be added here */}
 						</SelectContent>
 					</Select>
 				</div>
 
-				<TransportsList />
+				<TransportsList initialTransports={initialTransports} />
 			</div>
 		);
 	}
@@ -262,7 +277,6 @@ export default function TransportsFilter({
 							<SelectContent>
 								<SelectItem value="date-desc">Najnowsze</SelectItem>
 								<SelectItem value="date-asc">Najstarsze</SelectItem>
-								{/* Other sorting options could be added here */}
 							</SelectContent>
 						</Select>
 					</CardTitle>
@@ -272,7 +286,7 @@ export default function TransportsFilter({
 
 			<Separator />
 
-			<TransportsList />
+			<TransportsList initialTransports={initialTransports} />
 		</div>
 	);
 }
