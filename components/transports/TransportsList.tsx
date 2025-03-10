@@ -4,30 +4,26 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import TransportCard from "./TransportCard";
 import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import type { Transport, TransportsListProps } from "@/types/transport.types";
 import { useFilteredTransports } from "@/hooks/use-transports";
-import type { Transport } from "@/types/transport.types";
-
-interface TransportsListProps {
-	initialTransports?: Transport[];
-}
+import { toast } from "sonner";
 
 export default function TransportsList({
 	initialTransports,
 }: TransportsListProps) {
-	// Używamy istniejącego hooka useFilteredTransports który zawiera obsługę filtrów z useFiltersStore
+	// Użyj istniejącego hooka do filtrowanych transportów zamiast własnej implementacji
 	const { transports, isLoading } = useFilteredTransports();
 
-	// W przypadku błędu wyświetl toast z sonner
+	// W przypadku błędu wyświetl toast
 	React.useEffect(() => {
 		if (transports === undefined && !isLoading) {
 			toast.error("Nie udało się pobrać ogłoszeń transportowych");
 		}
 	}, [transports, isLoading]);
 
-	// Użyj przekazanych initialTransports (dla SSR) lub pobranych z hooka (dla CSR)
+	// Użyj przekazanych initialTransports (dla SSR) lub pobrane z hooka (dla CSR)
 	const displayTransports =
-		initialTransports?.length && !transports.length
+		initialTransports && initialTransports.length > 0 && !transports.length
 			? initialTransports
 			: (transports as unknown as Transport[]);
 
@@ -39,7 +35,7 @@ export default function TransportsList({
 		);
 	}
 
-	if (!displayTransports.length) {
+	if (displayTransports.length === 0) {
 		return (
 			<Card className="w-full mt-4">
 				<CardContent className="flex flex-col items-center justify-center py-12">
