@@ -1,16 +1,46 @@
-import Hero from "@/components/hero";
-import ConnectSupabaseSteps from "@/components/tutorial/connect-supabase-steps";
-import SignUpUserSteps from "@/components/tutorial/sign-up-user-steps";
-import { hasEnvVars } from "@/utils/supabase/check-env-vars";
+// app/page.tsx
+import { Suspense } from "react";
+import TransportsList from "@/components/transports/TransportsList";
+import TransportsFilter from "@/components/transports/TransportsFilter";
+import { createServerComponentClient } from "@/lib/supabase";
+import { redirect } from "next/navigation";
 
-export default async function Home() {
-  return (
-    <>
-      <Hero />
-      <main className="flex-1 flex flex-col gap-6 px-4">
-        <h2 className="font-medium text-xl mb-4">Next steps</h2>
-        {hasEnvVars ? <SignUpUserSteps /> : <ConnectSupabaseSteps />}
-      </main>
-    </>
-  );
+export default async function HomePage() {
+	const supabase = await createServerComponentClient();
+
+	// Fetch categories and vehicles for filters
+	const [categoriesResponse, vehiclesResponse] = await Promise.all([
+		supabase.from("categories").select("id, name, _count(transports(id))"),
+		supabase.from("vehicles").select("id, name, _count(transports(id))"),
+	]);
+
+	const categories = categoriesResponse.data || [];
+	const vehicles = vehiclesResponse.data || [];
+
+	// Check user authentication status
+	const {
+		data: { session },
+	} = await supabase.auth.getSession();
+
+	if (session) {
+		// Check if user's profile is complete (for redirection if needed)
+		const { data: user } = await supabase
+			.from("users")
+			.select("name, surname, phone")
+			.eq("id", session.user.id)
+			.single();
+
+		// If user has no profile details, redirect to settings
+		if (!user?.name || !user?.surname || !user?.phone) {
+			redirect("/user/profile/settings");
+		}
+	}
+
+	return (
+		<div className="w-full">
+			<h1 className="text-2xl font-bold mb-6 sr-only">
+				Giełda transportowa Fenilo
+			</h1>
+		</div>
+	);
 }
